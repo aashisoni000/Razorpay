@@ -20,13 +20,13 @@ export async function getTestPrisma(): Promise<PrismaClient | null> {
 }
 
 export async function cleanupTestDb(tx: PrismaClient): Promise<void> {
-  await tx.auditEntry.deleteMany();
-  await tx.exception.deleteMany();
-  await tx.recoveryAction.deleteMany();
-  await tx.paymentEvent.deleteMany();
-  await tx.obligation.deleteMany();
-  await tx.customer.deleteMany();
-  await tx.recoveryPolicy.deleteMany();
+  await tx.$executeRaw`DELETE FROM audit_entries`;
+  await tx.$executeRaw`DELETE FROM exceptions`;
+  await tx.$executeRaw`DELETE FROM recovery_actions`;
+  await tx.$executeRaw`DELETE FROM payment_events`;
+  await tx.$executeRaw`DELETE FROM obligations`;
+  await tx.$executeRaw`DELETE FROM customers`;
+  await tx.$executeRaw`DELETE FROM recovery_policies`;
 }
 
 export async function closeTestPrisma(): Promise<void> {

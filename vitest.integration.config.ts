@@ -9,6 +9,7 @@ export default defineConfig({
     globals: true,
     include: ["tests/integration/**/*.test.ts"],
     environment: "node",
+    fileParallelism: false,
   },
   resolve: {
     alias: {
