@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 export interface ExceptionInput {
   obligationId?: string;
@@ -16,7 +16,7 @@ export async function createException(
       obligationId: input.obligationId ?? undefined,
       type: input.type as never,
       description: input.description,
-      payload: input.payload ?? undefined,
+      payload: (input.payload as Prisma.InputJsonValue) ?? undefined,
     },
   });
 }

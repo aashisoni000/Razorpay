@@ -1,7 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { matchPaymentToObligation } from "../domain/matching";
 import { calculateLedger } from "../domain/ledger";
-import { recomputeObligationLedger, evaluateDecisionForObligation, updateObligationFromLedger } from "./obligation-service";
+import { evaluateDecisionForObligation, updateObligationFromLedger } from "./obligation-service";
 import { createAuditEntry } from "./audit-service";
 import { createException } from "./exception-service";
 
@@ -54,7 +54,7 @@ export async function processPaymentEvent(
         subscriptionId: input.subscriptionId,
       },
       occurredAt: input.occurredAt,
-      rawPayload: input.rawPayload ?? undefined,
+      rawPayload: (input.rawPayload as Prisma.InputJsonValue) ?? undefined,
     },
   });
 
@@ -72,6 +72,11 @@ export async function processPaymentEvent(
     },
   });
 
+  const candidatesWithRefs = candidateObligations.map((c) => ({
+    ...c,
+    sourceReference: c.sourceReference ?? undefined,
+  }));
+
   const matchInput = {
     id: event.id,
     amountPaise: input.amountPaise,
@@ -82,7 +87,7 @@ export async function processPaymentEvent(
     occurredAt: input.occurredAt,
   };
 
-  const matchResult = matchPaymentToObligation(matchInput, candidateObligations);
+  const matchResult = matchPaymentToObligation(matchInput, candidatesWithRefs);
 
   if (matchResult.evidenceTier === "INSUFFICIENT_EVIDENCE") {
     await createAuditEntry(tx, {

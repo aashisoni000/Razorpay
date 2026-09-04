@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 export interface AuditEntryInput {
   obligationId: string;
@@ -18,8 +18,8 @@ export async function createAuditEntry(
     data: {
       obligationId: input.obligationId,
       eventType: input.eventType,
-      stateBefore: input.stateBefore ?? undefined,
-      stateAfter: input.stateAfter ?? undefined,
+      stateBefore: (input.stateBefore as Prisma.InputJsonValue) ?? undefined,
+      stateAfter: (input.stateAfter as Prisma.InputJsonValue) ?? undefined,
       decision: input.decision ?? undefined,
       reasonCode: input.reasonCode ?? undefined,
       actor: input.actor ?? "system",
