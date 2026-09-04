@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id                String        @id @default(cuid())
+  name              String
+  externalReference String?       @unique
+  createdAt         DateTime      @default(now()) @map("created_at")
+  obligations       Obligation[]
+
+  @@map("customers")
+}
+
+model Obligation {
+  id                   String            @id @default(cuid())
+  customerId           String            @map("customer_id")
+  originalAmountPaise  BigInt            @map("original_amount_paise")
+  sourceType           String            @map("source_type")
+  sourceReference      String?           @map("source_reference")
+  status               ObligationStatus  @default(OPEN)
+  recoveredAmountPaise BigInt            @default(0) @map("recovered_amount_paise")
+  refundedAmountPaise  BigInt            @default(0) @map("refunded_amount_paise")
+  outstandingAmountPaise BigInt          @default(0) @map("outstanding_amount_paise")
+  excessAmountPaise    BigInt            @default(0) @map("excess_amount_paise")
+  recoveryPolicyId     String?           @map("recovery_policy_id")
+  version              Int               @default(1)
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  customer             Customer          @relation(fields: [customerId], references: [id])
+  recoveryPolicy       RecoveryPolicy?   @relation(fields: [recoveryPolicyId], references: [id])
+  paymentEvents        PaymentEvent[]
+  recoveryActions      RecoveryAction[]
+  auditEntries         AuditEntry[]
+  exceptions           Exception[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([sourceReference])
+  @@map("obligations")
+}
+
+model PaymentEvent {
+  id               String          @id @default(cuid())
+  externalEventId  String          @unique @map("external_event_id")
+  obligationId     String?         @map("obligation_id")
+  type             PaymentEventType
+  amountPaise      BigInt          @map("amount_paise")
+  source           String
+  referenceIds     Json?           @map("reference_ids")
+  occurredAt       DateTime        @map("occurred_at")
+  receivedAt       DateTime        @default(now()) @map("received_at")
+  rawPayload       Json?           @map("raw_payload")
+
+  obligation       Obligation?     @relation(fields: [obligationId], references: [id])
+
+  @@index([obligationId])
+  @@index([occurredAt])
+  @@map("payment_events")
+}
+
+model RecoveryPolicy {
+  id                           String @id @default(cuid())
+  maxAttempts                  Int    @default(3) @map("max_attempts")
+  recoveryWindowHours          Int    @default(72) @map("recovery_window_hours")
+  allowedActions               String @default("payment_link") @map("allowed_actions")
+  cooldownBetweenAttemptsHours Int    @default(24) @map("cooldown_between_attempts_hours")
+
+  obligations Obligation[]
+
+  @@map("recovery_policies")
+}
+
+model RecoveryAction {
+  id                       String            @id @default(cuid())
+  obligationId             String            @map("obligation_id")
+  type                     String
+  status                   RecoveryActionStatus @default(CREATED)
+  amountPaise              BigInt            @map("amount_paise")
+  razorpayPaymentLinkId    String?           @map("razorpay_payment_link_id")
+  createdAt                DateTime          @default(now()) @map("created_at")
+  resolvedAt               DateTime?         @map("resolved_at")
+
+  obligation               Obligation        @relation(fields: [obligationId], references: [id])
+
+  @@index([obligationId])
+  @@map("recovery_actions")
+}
+
+model AuditEntry {
+  id             String   @id @default(cuid())
+  obligationId   String   @map("obligation_id")
+  timestamp      DateTime @default(now())
+  eventType      String   @map("event_type")
+  stateBefore    Json?    @map("state_before")
+  stateAfter     Json?    @map("state_after")
+  decision       String?
+  reasonCode     String?  @map("reason_code")
+  actor          String   @default("system")
+
+  obligation     Obligation @relation(fields: [obligationId], references: [id])
+
+  @@index([obligationId])
+  @@index([timestamp])
+  @@map("audit_entries")
+}
+
+model Exception {
+  id             String           @id @default(cuid())
+  obligationId   String?          @map("obligation_id")
+  type           ExceptionType
+  description    String
+  payload        Json?
+  status         ExceptionStatus  @default(OPEN)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  resolvedAt     DateTime?        @map("resolved_at")
+  resolvedBy     String?          @map("resolved_by")
+
+  obligation     Obligation?      @relation(fields: [obligationId], references: [id])
+
+  @@index([obligationId])
+  @@index([status])
+  @@map("exceptions")
+}
+
+enum ObligationStatus {
+  OPEN
+  PARTIALLY_RECOVERED
+  RECOVERED
+  OVERPAID
+  STOPPED
+  ESCALATED
+}
+
+enum PaymentEventType {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  PARTIAL
+  REFUND
+  DUPLICATE
+  RETRY
+  PAYMENT_LINK_EVENT
+}
+
+enum RecoveryActionStatus {
+  CREATED
+  ACTIVE
+  SUCCEEDED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum ExceptionType {
+  AMBIGUOUS_ASSOCIATION
+  MISSING_REFERENCE
+  CONFLICTING_EVENTS
+  OVERPAYMENT
+  UNRESOLVED_ASSOCIATION
+  MANUAL_REVIEW_REQUIRED
+}
+
+enum ExceptionStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
