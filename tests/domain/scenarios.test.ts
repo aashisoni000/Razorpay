@@ -98,14 +98,18 @@ describe("scenario replay", () => {
   });
 
   describe("refund reopens obligation", () => {
-    it("full payment followed by refund (replay engine limitation: refund on RECOVERED is unlinked)", () => {
+    it("full payment followed by refund reopens obligation via orderId", () => {
       const scenario = scenarios.find(
         (s) => s.id === "refund_after_recovery"
       )!;
       const result = replayScenario(scenario);
 
       expect(result.finalLedger.recoveredAmountPaise).toBe(1000000n);
-      expect(result.exceptionsCreated).toBe(1);
+      expect(result.finalLedger.refundedAmountPaise).toBe(200000n);
+      expect(result.finalLedger.outstandingAmountPaise).toBe(200000n);
+      expect(result.finalLedger.status).toBe("PARTIALLY_RECOVERED");
+      expect(result.exceptionsCreated).toBe(0);
+      expect(result.linkedEventIds).toContain("evt-refund-2");
     });
   });
 

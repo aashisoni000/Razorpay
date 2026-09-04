@@ -224,7 +224,7 @@ export const scenarios: Scenario[] = [
     id: "refund_after_recovery",
     name: "Refund After Recovery",
     description:
-      "Fully recovered, then ₹2,000 refunded. In the full app, this reopens the obligation. The replay engine's simplified matching excludes RECOVERED obligations from candidates, so the refund is treated as unlinked.",
+      "Fully recovered, then ₹2,000 refunded. The refund links via orderId and reopens the obligation.",
     customers: [{ id: "cust-refund", name: "Customer D" }],
     obligations: [
       {
@@ -256,14 +256,17 @@ export const scenarios: Scenario[] = [
     expectedFinalObligationId: "ob-refund",
     expectedLedger: {
       recoveredAmountPaise: 1000000n,
-      refundedAmountPaise: 0n,
-      outstandingAmountPaise: 0n,
+      refundedAmountPaise: 200000n,
+      outstandingAmountPaise: 200000n,
       excessAmountPaise: 0n,
-      status: "RECOVERED",
+      status: "PARTIALLY_RECOVERED",
     },
-    expectedDecision: { decision: "STOP", reasonCode: "outstanding_zero" },
-    expectedException: true,
-    expectedLinkedEvents: ["evt-refund-1"],
+    expectedDecision: {
+      decision: "ACT",
+      reasonCode: "outstanding_and_policy_allows",
+    },
+    expectedException: false,
+    expectedLinkedEvents: ["evt-refund-1", "evt-refund-2"],
   },
   {
     id: "ambiguous_payment",

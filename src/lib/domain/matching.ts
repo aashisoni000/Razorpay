@@ -39,8 +39,10 @@ function findModerateMatches(
   candidates: CandidateObligation[]
 ): CandidateObligation[] {
   return candidates.filter((c) => {
+    if (event.amountPaise <= 0n) return false;
     if (event.customerId && c.customerId !== event.customerId) return false;
     if (c.outstandingAmountPaise <= 0n) return false;
+    if (c.status === "RECOVERED") return false;
     if (event.amountPaise <= c.outstandingAmountPaise) return true;
     return false;
   });
@@ -52,7 +54,7 @@ export function matchPaymentToObligation(
   recoveryWindowExpiry?: Date
 ): MatchingResult {
   const activeCandidates = candidateObligations.filter(
-    (c) => c.status !== "STOPPED" && c.status !== "RECOVERED"
+    (c) => c.status !== "STOPPED"
   );
 
   if (activeCandidates.length === 0) {

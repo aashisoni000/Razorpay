@@ -32,14 +32,7 @@ function determineStatus(
     return "OVERPAID";
   }
 
-  if (recoveredAmountPaise >= originalAmountPaise) {
-    if (refundedAmountPaise > 0n) {
-      return "PARTIALLY_RECOVERED";
-    }
-    return "RECOVERED";
-  }
-
-  return "OPEN";
+  return "RECOVERED";
 }
 
 export function calculateLedger(input: LedgerInput): LedgerResult {

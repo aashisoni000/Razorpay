@@ -54,7 +54,11 @@ export async function processPaymentEvent(
 
     const candidateObligations = await tx.obligation.findMany({
       where: {
-        status: { notIn: ["STOPPED", "RECOVERED"] },
+        status: {
+          notIn: parsed.type === "REFUND"
+            ? ["STOPPED"]
+            : ["STOPPED", "RECOVERED"],
+        },
         ...(parsed.customerId ? { customerId: parsed.customerId } : {}),
       },
       select: {
@@ -87,16 +91,9 @@ export async function processPaymentEvent(
     );
 
     if (matchResult.evidenceTier === "INSUFFICIENT_EVIDENCE") {
-      const unresolvedObligationId =
-        candidateObligations.length > 0
-          ? candidateObligations[0].id
-          : await tx.obligation
-              .findFirst({ select: { id: true } })
-              .then((o) => o?.id ?? "");
-
-      if (unresolvedObligationId) {
+      if (matchResult.candidates.length > 0) {
         await createAuditEntry(tx, {
-          obligationId: unresolvedObligationId,
+          obligationId: matchResult.candidates[0],
           eventType: "PAYMENT_EVENT_RECEIVED",
           stateAfter: {
             eventId: event.id,
