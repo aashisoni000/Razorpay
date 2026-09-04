@@ -93,7 +93,6 @@ export function decide(input: DecisionInput): DecisionResult {
     evidence: [
       `${formatPaise(obligation.outstandingAmountPaise)} remains outstanding`,
       "No active recovery action exists",
-      "Recovery window is active",
       "Policy allows payment-link recovery",
     ],
   };

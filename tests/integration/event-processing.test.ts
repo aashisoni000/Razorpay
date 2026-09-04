@@ -3,7 +3,15 @@ import { PrismaClient } from "@prisma/client";
 import { getTestPrisma, cleanupTestDb, closeTestPrisma } from "./setup";
 import { processPaymentEvent } from "@/lib/services/payment-event-service";
 
-let tx: PrismaClient;
+let tx: PrismaClient | null = null;
+
+function describeIfDb(name: string, fn: () => void) {
+  if (tx) {
+    describe(name, fn);
+  } else {
+    describe.skip(name, fn);
+  }
+}
 
 async function createObligation(
   data: {
@@ -13,7 +21,7 @@ async function createObligation(
     sourceType?: string;
   }
 ) {
-  return tx.obligation.create({
+  return tx!.obligation.create({
     data: {
       customerId: data.customerId,
       originalAmountPaise: data.originalAmountPaise,
@@ -25,13 +33,11 @@ async function createObligation(
 }
 
 async function createCustomer(name: string) {
-  return tx.customer.create({ data: { name } });
+  return tx!.customer.create({ data: { name } });
 }
 
 beforeAll(async () => {
-  const prisma = await getTestPrisma();
-  if (!prisma) return;
-  tx = prisma;
+  tx = await getTestPrisma();
 });
 
 afterAll(async () => {
@@ -43,9 +49,7 @@ beforeEach(async () => {
 });
 
 describe("event processing integration", () => {
-  const describe_if_db = tx ? describe : describe.skip;
-
-  describe_if_db("TEST 1 — normal payment", () => {
+  describeIfDb("TEST 1 — normal payment", () => {
     it("processes a single payment against an obligation", async () => {
       const customer = await createCustomer("Test Customer");
       const obligation = await createObligation({
@@ -54,7 +58,7 @@ describe("event processing integration", () => {
         sourceReference: "ORD-001",
       });
 
-      const result = await processPaymentEvent(tx, {
+      const result = await processPaymentEvent(tx!, {
         externalEventId: "evt-001",
         type: "CAPTURED",
         amountPaise: 600000n,
@@ -67,7 +71,7 @@ describe("event processing integration", () => {
       expect(result.linked).toBe(true);
       expect(result.obligationId).toBe(obligation.id);
 
-      const updated = await tx.obligation.findUnique({
+      const updated = await tx!.obligation.findUnique({
         where: { id: obligation.id },
       });
       expect(updated!.outstandingAmountPaise).toBe(400000n);
@@ -76,7 +80,7 @@ describe("event processing integration", () => {
     });
   });
 
-  describe_if_db("TEST 2 — duplicate event", () => {
+  describeIfDb("TEST 2 — duplicate event", () => {
     it("does not process the same event twice", async () => {
       const customer = await createCustomer("Test Customer");
       await createObligation({
@@ -95,25 +99,25 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T10:00:00Z"),
       };
 
-      const result1 = await processPaymentEvent(tx, input);
+      const result1 = await processPaymentEvent(tx!, input);
       expect(result1.linked).toBe(true);
 
-      const result2 = await processPaymentEvent(tx, input);
+      const result2 = await processPaymentEvent(tx!, input);
       expect(result2.eventId).toBe(result1.eventId);
 
-      const eventCount = await tx.paymentEvent.count({
+      const eventCount = await tx!.paymentEvent.count({
         where: { externalEventId: "evt-dup-001" },
       });
       expect(eventCount).toBe(1);
 
-      const obligation = await tx.obligation.findFirst({
+      const obligation = await tx!.obligation.findFirst({
         where: { customerId: customer.id },
       });
       expect(obligation!.recoveredAmountPaise).toBe(500000n);
     });
   });
 
-  describe_if_db("TEST 3 — multiple payments", () => {
+  describeIfDb("TEST 3 — multiple payments", () => {
     it("processes two payments to fully settle", async () => {
       const customer = await createCustomer("Test Customer");
       const obligation = await createObligation({
@@ -122,7 +126,7 @@ describe("event processing integration", () => {
         sourceReference: "ORD-003",
       });
 
-      await processPaymentEvent(tx, {
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-multi-1",
         type: "CAPTURED",
         amountPaise: 600000n,
@@ -132,7 +136,7 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T10:00:00Z"),
       });
 
-      await processPaymentEvent(tx, {
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-multi-2",
         type: "CAPTURED",
         amountPaise: 400000n,
@@ -142,7 +146,7 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T10:05:00Z"),
       });
 
-      const updated = await tx.obligation.findUnique({
+      const updated = await tx!.obligation.findUnique({
         where: { id: obligation.id },
       });
       expect(updated!.outstandingAmountPaise).toBe(0n);
@@ -151,7 +155,7 @@ describe("event processing integration", () => {
     });
   });
 
-  describe_if_db("TEST 4 — ambiguous payment", () => {
+  describeIfDb("TEST 4 — ambiguous payment", () => {
     it("creates exception for unmatched payment", async () => {
       const customer = await createCustomer("Priya Sharma");
       await createObligation({
@@ -165,7 +169,7 @@ describe("event processing integration", () => {
         sourceReference: "ORD-B",
       });
 
-      const result = await processPaymentEvent(tx, {
+      const result = await processPaymentEvent(tx!, {
         externalEventId: "evt-amb-001",
         type: "CAPTURED",
         amountPaise: 500000n,
@@ -177,11 +181,11 @@ describe("event processing integration", () => {
       expect(result.linked).toBe(false);
       expect(result.exceptionCreated).toBe(true);
 
-      const exceptions = await tx.exception.findMany();
+      const exceptions = await tx!.exception.findMany();
       expect(exceptions.length).toBe(1);
       expect(exceptions[0].type).toBe("UNRESOLVED_ASSOCIATION");
 
-      const obligations = await tx.obligation.findMany({
+      const obligations = await tx!.obligation.findMany({
         where: { customerId: customer.id },
       });
       for (const ob of obligations) {
@@ -191,7 +195,7 @@ describe("event processing integration", () => {
     });
   });
 
-  describe_if_db("TEST 5 — overpayment", () => {
+  describeIfDb("TEST 5 — overpayment", () => {
     it("flags excess when payment exceeds original", async () => {
       const customer = await createCustomer("Test Customer");
       const obligation = await createObligation({
@@ -200,7 +204,7 @@ describe("event processing integration", () => {
         sourceReference: "ORD-005",
       });
 
-      await processPaymentEvent(tx, {
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-over-001",
         type: "CAPTURED",
         amountPaise: 1200000n,
@@ -210,7 +214,7 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T10:00:00Z"),
       });
 
-      const updated = await tx.obligation.findUnique({
+      const updated = await tx!.obligation.findUnique({
         where: { id: obligation.id },
       });
       expect(updated!.outstandingAmountPaise).toBe(0n);
@@ -219,7 +223,7 @@ describe("event processing integration", () => {
     });
   });
 
-  describe_if_db("TEST 6 — refund", () => {
+  describeIfDb("TEST 6 — refund", () => {
     it("processes refund and updates ledger", async () => {
       const customer = await createCustomer("Test Customer");
       const obligation = await createObligation({
@@ -228,7 +232,7 @@ describe("event processing integration", () => {
         sourceReference: "ORD-006",
       });
 
-      await processPaymentEvent(tx, {
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-refund-capture",
         type: "CAPTURED",
         amountPaise: 1000000n,
@@ -238,7 +242,7 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T10:00:00Z"),
       });
 
-      await processPaymentEvent(tx, {
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-refund-001",
         type: "REFUND",
         amountPaise: 200000n,
@@ -248,7 +252,7 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T11:00:00Z"),
       });
 
-      const updated = await tx.obligation.findUnique({
+      const updated = await tx!.obligation.findUnique({
         where: { id: obligation.id },
       });
       expect(updated!.recoveredAmountPaise).toBe(1000000n);
@@ -258,7 +262,7 @@ describe("event processing integration", () => {
     });
   });
 
-  describe_if_db("TEST 7 — optimistic locking", () => {
+  describeIfDb("TEST 7 — optimistic locking", () => {
     it("detects version conflict on concurrent update", async () => {
       const customer = await createCustomer("Test Customer");
       const obligation = await createObligation({
@@ -267,7 +271,9 @@ describe("event processing integration", () => {
         sourceReference: "ORD-007",
       });
 
-      await processPaymentEvent(tx, {
+      const initialVersion = obligation.version;
+
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-lock-1",
         type: "CAPTURED",
         amountPaise: 300000n,
@@ -277,11 +283,7 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T10:00:00Z"),
       });
 
-      const stale = await tx.obligation.findUnique({
-        where: { id: obligation.id },
-      });
-
-      await processPaymentEvent(tx, {
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-lock-2",
         type: "CAPTURED",
         amountPaise: 200000n,
@@ -292,7 +294,7 @@ describe("event processing integration", () => {
       });
 
       await expect(
-        processPaymentEvent(tx, {
+        processPaymentEvent(tx!, {
           externalEventId: "evt-lock-3",
           type: "CAPTURED",
           amountPaise: 100000n,
@@ -303,14 +305,14 @@ describe("event processing integration", () => {
         })
       ).resolves.toBeDefined();
 
-      const final = await tx.obligation.findUnique({
+      const final_ = await tx!.obligation.findUnique({
         where: { id: obligation.id },
       });
-      expect(final!.version).toBeGreaterThan(stale!.version);
+      expect(final_!.version).toBeGreaterThan(initialVersion);
     });
   });
 
-  describe_if_db("audit trail", () => {
+  describeIfDb("audit trail", () => {
     it("creates audit entries for event processing", async () => {
       const customer = await createCustomer("Test Customer");
       await createObligation({
@@ -319,7 +321,7 @@ describe("event processing integration", () => {
         sourceReference: "ORD-AUDIT",
       });
 
-      await processPaymentEvent(tx, {
+      await processPaymentEvent(tx!, {
         externalEventId: "evt-audit-1",
         type: "CAPTURED",
         amountPaise: 500000n,
@@ -329,7 +331,7 @@ describe("event processing integration", () => {
         occurredAt: new Date("2025-01-15T10:00:00Z"),
       });
 
-      const entries = await tx.auditEntry.findMany({
+      const entries = await tx!.auditEntry.findMany({
         orderBy: { timestamp: "asc" },
       });
 

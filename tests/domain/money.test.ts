@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatPaise, paiseToRupees, rupeesToPaise, zero } from "@/lib/utils/money";
+import { formatPaise, paiseToRupees, rupeesToPaise } from "@/lib/utils/money";
 
 describe("money utilities", () => {
   describe("formatPaise", () => {
@@ -31,13 +31,6 @@ describe("money utilities", () => {
       expect(rupeesToPaise(0)).toBe(0n);
       expect(rupeesToPaise(1)).toBe(100n);
       expect(rupeesToPaise(10000)).toBe(1000000n);
-    });
-  });
-
-  describe("zero", () => {
-    it("returns bigint zero", () => {
-      expect(zero()).toBe(0n);
-      expect(typeof zero()).toBe("bigint");
     });
   });
 });

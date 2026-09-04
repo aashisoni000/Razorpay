@@ -1,27 +1,24 @@
-import { PrismaClient, Prisma } from "@prisma/client";
-
-export interface ExceptionInput {
-  obligationId?: string;
-  type: string;
-  description: string;
-  payload?: Record<string, unknown>;
-}
+import { Prisma } from "@prisma/client";
+import { TransactionClient } from "./types";
+import { ExceptionInputSchema } from "../domain/validation";
 
 export async function createException(
-  tx: PrismaClient,
-  input: ExceptionInput
+  tx: TransactionClient,
+  input: unknown
 ) {
+  const parsed = ExceptionInputSchema.parse(input);
+
   return tx.exception.create({
     data: {
-      obligationId: input.obligationId ?? undefined,
-      type: input.type as never,
-      description: input.description,
-      payload: (input.payload as Prisma.InputJsonValue) ?? undefined,
+      obligationId: parsed.obligationId ?? undefined,
+      type: parsed.type,
+      description: parsed.description,
+      payload: (parsed.payload as Prisma.InputJsonValue) ?? undefined,
     },
   });
 }
 
-export async function getOpenExceptions(tx: PrismaClient) {
+export async function getOpenExceptions(tx: TransactionClient) {
   return tx.exception.findMany({
     where: { status: "OPEN" },
     orderBy: { createdAt: "desc" },

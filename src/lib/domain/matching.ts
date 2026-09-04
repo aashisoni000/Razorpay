@@ -3,6 +3,7 @@ import {
   CandidateObligation,
   MatchingResult,
 } from "./types";
+import { formatPaise } from "../utils/money";
 
 function extractReferences(
   event: PaymentEventMatchInput
@@ -148,8 +149,4 @@ export function matchPaymentToObligation(
     reasonCode: "no_match",
     candidates: activeCandidates.map((c) => c.id),
   };
-}
-
-function formatPaise(amount: bigint): string {
-  return `₹${(Number(amount) / 100).toLocaleString("en-IN")}`;
 }

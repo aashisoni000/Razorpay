@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { TransactionClient } from "./types";
 
 export interface AuditEntryInput {
   obligationId: string;
@@ -11,7 +12,7 @@ export interface AuditEntryInput {
 }
 
 export async function createAuditEntry(
-  tx: PrismaClient,
+  tx: TransactionClient,
   input: AuditEntryInput
 ): Promise<void> {
   await tx.auditEntry.create({
@@ -28,7 +29,7 @@ export async function createAuditEntry(
 }
 
 export async function getAuditEntries(
-  tx: PrismaClient,
+  tx: TransactionClient,
   obligationId: string
 ) {
   return tx.auditEntry.findMany({

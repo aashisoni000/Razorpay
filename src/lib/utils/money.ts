@@ -15,7 +15,3 @@ export function paiseToRupees(amountPaise: bigint): number {
 export function rupeesToPaise(rupees: number): bigint {
   return BigInt(Math.round(rupees * 100));
 }
-
-export function zero(): bigint {
-  return 0n;
-}

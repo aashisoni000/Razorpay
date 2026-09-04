@@ -1,4 +1,5 @@
-import { PrismaClient, Obligation, ObligationStatus } from "@prisma/client";
+import { Obligation, ObligationStatus } from "@prisma/client";
+import { TransactionClient } from "./types";
 import { calculateLedger } from "../domain/ledger";
 import { decide } from "../domain/decision";
 import { DEFAULT_POLICY } from "../domain/policies";
@@ -36,7 +37,7 @@ function toLedgerEvents(
 }
 
 export async function recomputeObligationLedger(
-  tx: PrismaClient,
+  tx: TransactionClient,
   obligationId: string
 ): Promise<{ ledger: LedgerResult; obligation: Obligation }> {
   const obligation = await tx.obligation.findUniqueOrThrow({
@@ -53,7 +54,7 @@ export async function recomputeObligationLedger(
 }
 
 export async function evaluateDecisionForObligation(
-  tx: PrismaClient,
+  tx: TransactionClient,
   obligationId: string,
   opts: { hasUnresolvedAssociation: boolean; now: Date }
 ): Promise<DecisionResult> {
@@ -99,7 +100,7 @@ export async function evaluateDecisionForObligation(
 }
 
 export async function updateObligationFromLedger(
-  tx: PrismaClient,
+  tx: TransactionClient,
   obligationId: string,
   ledger: LedgerResult,
   expectedVersion: number

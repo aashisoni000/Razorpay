@@ -56,8 +56,8 @@ export function calculateLedger(input: LedgerInput): LedgerResult {
       : 0n;
 
   const excessAmountPaise =
-    recoveredAmountPaise > originalAmountPaise
-      ? recoveredAmountPaise - originalAmountPaise
+    netRecovered > originalAmountPaise
+      ? netRecovered - originalAmountPaise
       : 0n;
 
   const status = determineStatus(
