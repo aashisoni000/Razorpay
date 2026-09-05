@@ -1,0 +1,32 @@
+{
+  "scenario_distribution": {
+    "customer_match": 10652,
+    "corrupted_reference": 52634,
+    "no_reference": 128220,
+    "reference_match": 9177
+  },
+  "feature_overlap": {
+    "amountRatio": {
+      "positive_range": [
+        0.08472286851765679,
+        3.143579214632197
+      ],
+      "negative_range": [
+        0.16915897482604975,
+        5.0
+      ],
+      "has_overlap": true
+    },
+    "amountDifferencePaise": {
+      "positive_range": [
+        0,
+        401149
+      ],
+      "negative_range": [
+        0,
+        346641
+      ],
+      "has_overlap": true
+    }
+  }
+}

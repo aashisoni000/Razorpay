@@ -58,12 +58,15 @@ export default async function SettingsPage() {
           <div className="space-y-4">
             <div className="p-3 rounded-lg bg-surface-muted">
               <p className="text-sm font-medium text-text-primary mb-1">
-                Deterministic Mode
+                Hybrid Matching
               </p>
               <p className="text-xs text-text-secondary">
-                No LLM in the money-moving path. All decisions are made by a
-                priority-based rule engine. AI only explains decisions
-                post-hoc.
+                Clear payments are matched deterministically. Ambiguous payments
+                are ranked by the ML matching model. Ledger and recovery
+                decisions remain deterministic.
+              </p>
+              <p className="text-xs text-text-muted mt-1">
+                ML role: obligation matching only
               </p>
             </div>
             <div className="p-3 rounded-lg bg-surface-muted">

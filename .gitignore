@@ -47,3 +47,6 @@ next-env.d.ts
 .devin/
 AGENTS.md
 CLAUDE.md
+
+# ML raw datasets (too large for git)
+data/raw/

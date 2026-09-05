@@ -1,0 +1,34 @@
+{
+  "n_customers": 200,
+  "obls_per_cust": [
+    2,
+    8
+  ],
+  "amt_range": [
+    50000,
+    500000
+  ],
+  "window_h": [
+    24,
+    168
+  ],
+  "time_span_h": 720,
+  "n_payments": 5000,
+  "contact_error_rate": 0.2,
+  "scenarios": {
+    "exact_full": 0.15,
+    "exact_partial": 0.1,
+    "missing_ref": 0.12,
+    "corrupted_ref": 0.08,
+    "similar_amounts": 0.12,
+    "multi_obligation": 0.05,
+    "delayed": 0.05,
+    "duplicate": 0.05,
+    "overpayment": 0.05,
+    "unmatched": 0.05,
+    "noisy_contact": 0.04,
+    "shared_contact": 0.03,
+    "ambiguous": 0.04,
+    "failed_then": 0.02
+  }
+}

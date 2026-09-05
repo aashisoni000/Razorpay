@@ -1,0 +1,103 @@
+{
+  "no_allocation_in_features": true,
+  "no_scenario_in_features": true,
+  "entity_isolation": true,
+  "no_duplicate_pairs": true,
+  "candidate_set_sizes": {
+    "min": 1,
+    "max": 1032,
+    "mean": 40.1366
+  },
+  "label_distribution": {
+    "positive": 688,
+    "negative": 199995,
+    "ratio": 0.003428292381517119
+  },
+  "feature_ranges": {
+    "sameCustomer": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.34
+    },
+    "amountRatio": {
+      "min": 0.16915897482604975,
+      "max": 5.0,
+      "mean": 1.1196557410515124
+    },
+    "amountDifferencePaise": {
+      "min": 0,
+      "max": 346641,
+      "mean": 120239.92
+    },
+    "hasReference": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.13
+    },
+    "referenceMatch": {
+      "min": 0,
+      "max": 0,
+      "mean": 0.0
+    },
+    "referenceSimilarity": {
+      "min": 0.0,
+      "max": 0.9,
+      "mean": 0.08900000000000001
+    },
+    "paymentMethodCommon": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.8
+    },
+    "outstandingRatio": {
+      "min": 1.0,
+      "max": 1.0,
+      "mean": 1.0
+    },
+    "paymentIsPartial": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.57
+    },
+    "paymentIsExact": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.04
+    },
+    "paymentIsExcess": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.39
+    },
+    "candidateIsOpen": {
+      "min": 1,
+      "max": 1,
+      "mean": 1.0
+    },
+    "candidateIsPartiallyRecovered": {
+      "min": 0,
+      "max": 0,
+      "mean": 0.0
+    },
+    "numCandidates": {
+      "min": 2.0,
+      "max": 10,
+      "mean": 8.74
+    },
+    "obligationAgeHours": {
+      "min": -545.1199099159877,
+      "max": 497.75406426883484,
+      "mean": -23.56803552494439
+    },
+    "withinRecoveryWindow": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.65
+    },
+    "daysSinceCreation": {
+      "min": -22.71332957983282,
+      "max": 20.73975267786812,
+      "mean": -0.9820014802060162
+    }
+  }
+}

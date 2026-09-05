@@ -1,0 +1,16 @@
+{
+  "exact_partial": 3422,
+  "corrupted_ref": 2731,
+  "similar_amounts": 4400,
+  "multi_obligation": 1637,
+  "duplicate": 1580,
+  "exact_full": 5163,
+  "delayed": 1741,
+  "failed_then": 793,
+  "missing_ref": 4269,
+  "noisy_contact": 1083,
+  "shared_contact": 724,
+  "unmatched": 1466,
+  "overpayment": 1784,
+  "ambiguous": 1361
+}

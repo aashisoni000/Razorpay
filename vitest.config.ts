@@ -7,6 +7,7 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     exclude: ["tests/integration/**"],
     environment: "node",
+    fileParallelism: false,
   },
   resolve: {
     alias: {

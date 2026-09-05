@@ -1,0 +1,100 @@
+{
+  "code_no_allocation_in_features": true,
+  "code_no_scenario_in_features": true,
+  "no_duplicate_pairs": true,
+  "label_ratio": 0.14116439634260122,
+  "candidate_set_stats": {
+    "min": 2,
+    "max": 20,
+    "mean": 6.4,
+    "median": 5
+  },
+  "unique_payment_ids": true,
+  "feature_ranges": {
+    "sameCustomer": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.696
+    },
+    "amountRatio": {
+      "min": 0.005,
+      "max": 5.0,
+      "mean": 1.2202
+    },
+    "amountDifferencePaise": {
+      "min": 0,
+      "max": 901873,
+      "mean": 130667.288
+    },
+    "hasReference": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.664
+    },
+    "referenceMatch": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.078
+    },
+    "referenceSimilarity": {
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.419
+    },
+    "paymentMethodCommon": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.644
+    },
+    "outstandingRatio": {
+      "min": 1.0,
+      "max": 1.0,
+      "mean": 1.0
+    },
+    "paymentIsPartial": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.452
+    },
+    "paymentIsExact": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.082
+    },
+    "paymentIsExcess": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.466
+    },
+    "candidateIsOpen": {
+      "min": 1,
+      "max": 1,
+      "mean": 1.0
+    },
+    "candidateIsPartiallyRecovered": {
+      "min": 0,
+      "max": 0,
+      "mean": 0.0
+    },
+    "numCandidates": {
+      "min": 2.0,
+      "max": 10,
+      "mean": 7.22
+    },
+    "obligationAgeHours": {
+      "min": -597.7055,
+      "max": 900.9846,
+      "mean": 49.7618
+    },
+    "withinRecoveryWindow": {
+      "min": 0,
+      "max": 1,
+      "mean": 0.618
+    },
+    "daysSinceCreation": {
+      "min": -24.9044,
+      "max": 30,
+      "mean": 2.0523
+    }
+  }
+}

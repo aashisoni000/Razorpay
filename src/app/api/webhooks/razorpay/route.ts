@@ -51,9 +51,12 @@ export async function POST(request: NextRequest) {
       occurredAt: normalized.occurredAt,
       rawPayload: normalized.rawPayload,
     });
-  } catch {
-    // Log but return 200 to prevent Razorpay retry loops for processing errors.
-    // The signature was valid; the event was acknowledged.
+  } catch (err) {
+    console.error("[webhook] Processing error:", {
+      eventType: normalized.type,
+      externalEventId: normalized.externalEventId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return NextResponse.json({ status: "ok" }, { status: 200 });

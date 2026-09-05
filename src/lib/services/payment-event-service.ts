@@ -7,6 +7,7 @@ import {
 } from "./obligation-service";
 import { createAuditEntry } from "./audit-service";
 import { createException } from "./exception-service";
+import { orchestrateRecovery } from "./recovery-orchestrator";
 import { ProcessEventInputSchema } from "../domain/validation";
 import { rankCandidates } from "../ml/ranker";
 import { PaymentFeatures } from "../ml/features";
@@ -244,6 +245,11 @@ export async function processPaymentEvent(
       },
       decision: decision.decision,
       reasonCode: decision.reasonCode,
+    });
+
+    await orchestrateRecovery(tx, {
+      obligationId: matchResult.obligationId!,
+      decision,
     });
 
     return {

@@ -1,0 +1,53 @@
+{
+  "seed": 20260905,
+  "candidate_recall": 0.903954802259887,
+  "pair_metrics": {
+    "baseline": {
+      "precision": 1.0,
+      "fpr": 0.0,
+      "coverage": 0.0071174377224199285,
+      "n_accepted": 8
+    },
+    "lr": {
+      "precision": 1.0,
+      "fpr": 0.0,
+      "coverage": 0.0008896797153024911,
+      "n_accepted": 1,
+      "tp": 1,
+      "fp": 0,
+      "fn": 86,
+      "tn": 1037
+    }
+  },
+  "payment_metrics": {
+    "baseline": {
+      "precision": 1.0,
+      "coverage": 0.049079754601226995,
+      "n_accepted": 8
+    },
+    "lr": {
+      "precision": 1.0,
+      "coverage": 0.006134969325153374,
+      "n_accepted": 1
+    }
+  },
+  "ranking": {
+    "top1": 0.11042944785276074,
+    "top3": 0.26993865030674846,
+    "mrr": 0.190651475314052
+  },
+  "end_to_end": {
+    "total": 5000,
+    "strong": 2868,
+    "moderate": 1049,
+    "ml_eligible": 1083,
+    "ml_accepted": 8,
+    "ml_abstained": 1075,
+    "unresolved": 1075,
+    "resolved": 3925,
+    "coverage": 0.785
+  },
+  "threshold": 0.517780069554369,
+  "ml_experiment_valid": true,
+  "ready_for_integration": true
+}
