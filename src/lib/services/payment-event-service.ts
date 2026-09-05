@@ -8,6 +8,8 @@ import {
 import { createAuditEntry } from "./audit-service";
 import { createException } from "./exception-service";
 import { ProcessEventInputSchema } from "../domain/validation";
+import { rankCandidates } from "../ml/ranker";
+import { PaymentFeatures } from "../ml/features";
 
 export interface ProcessEventResult {
   eventId: string;
@@ -66,6 +68,7 @@ export async function processPaymentEvent(
         sourceReference: true,
         customerId: true,
         outstandingAmountPaise: true,
+        originalAmountPaise: true,
         status: true,
       },
     });
@@ -91,7 +94,24 @@ export async function processPaymentEvent(
     );
 
     if (matchResult.evidenceTier === "INSUFFICIENT_EVIDENCE") {
+      let mlResult = null;
       if (matchResult.candidates.length > 0) {
+        const paymentFeatures: PaymentFeatures = {
+          id: event.id,
+          amountPaise: parsed.amountPaise,
+          orderId: parsed.orderId,
+          invoiceId: parsed.invoiceId,
+          subscriptionId: parsed.subscriptionId,
+          customerId: parsed.customerId,
+          occurredAt: parsed.occurredAt,
+        };
+
+        try {
+          mlResult = rankCandidates(paymentFeatures, candidatesWithRefs, matchResult);
+        } catch {
+          mlResult = null;
+        }
+
         await createAuditEntry(tx, {
           obligationId: matchResult.candidates[0],
           eventType: "PAYMENT_EVENT_RECEIVED",
@@ -101,6 +121,17 @@ export async function processPaymentEvent(
             linked: false,
             evidenceTier: matchResult.evidenceTier,
             reasonCode: matchResult.reasonCode,
+            mlRanking: mlResult
+              ? {
+                  confidence: mlResult.confidence,
+                  recommendedCandidateId: mlResult.recommendedCandidateId,
+                  scores: mlResult.scores,
+                  evidence: mlResult.evidence,
+                  topScore: mlResult.topScore,
+                  secondScore: mlResult.secondScore,
+                  gap: mlResult.gap,
+                }
+              : null,
           },
           reasonCode: matchResult.reasonCode,
         });
@@ -115,6 +146,13 @@ export async function processPaymentEvent(
           candidateObligationIds: matchResult.candidates,
           evidenceTier: matchResult.evidenceTier,
           reasonCode: matchResult.reasonCode,
+          mlRanking: mlResult
+            ? {
+                confidence: mlResult.confidence,
+                recommendedCandidateId: mlResult.recommendedCandidateId,
+                evidence: mlResult.evidence,
+              }
+            : null,
         },
       });
 

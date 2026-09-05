@@ -39,6 +39,7 @@ function toCandidate(o: ScenarioObligation): CandidateObligation {
     sourceReference: o.sourceReference,
     customerId: o.customerId,
     outstandingAmountPaise: o.originalAmountPaise,
+    originalAmountPaise: o.originalAmountPaise,
     status: "OPEN",
   };
 }

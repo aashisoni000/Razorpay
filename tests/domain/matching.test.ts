@@ -24,6 +24,7 @@ function makeObligation(
     id: "ob-1",
     customerId: "cust-1",
     outstandingAmountPaise: 1000000n,
+    originalAmountPaise: 1000000n,
     status: "OPEN",
     ...overrides,
   };

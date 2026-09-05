@@ -131,12 +131,14 @@ describe("demo scenarios", () => {
           id: "ob-003",
           customerId: "cust-priya",
           outstandingAmountPaise: 800000n,
+          originalAmountPaise: 800000n,
           status: "OPEN",
         },
         {
           id: "ob-004",
           customerId: "cust-priya",
           outstandingAmountPaise: 1200000n,
+          originalAmountPaise: 1200000n,
           status: "OPEN",
         },
       ];

@@ -81,6 +81,7 @@ export interface CandidateObligation {
   sourceReference?: string;
   customerId: string;
   outstandingAmountPaise: bigint;
+  originalAmountPaise: bigint;
   status: ObligationStatus;
 }
 
