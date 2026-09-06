@@ -302,4 +302,66 @@ describe("recovery flow integration", () => {
     expect(updated!.outstandingAmountPaise).toBe(1000000n);
     expect(updated!.status).toBe("OPEN");
   });
+
+  it("refund after full recovery reopens obligation and creates recovery action", async () => {
+    if (!tx) return;
+
+    const customer = await createCustomer("Refund Reopen User");
+    const obligation = await createObligation({
+      customerId: customer.id,
+      originalAmountPaise: 1000000n,
+      sourceReference: "ORD-REFUND-REOPEN",
+    });
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt_refund_reopen_1",
+      type: "CAPTURED",
+      amountPaise: 1000000n,
+      source: "razorpay",
+      orderId: "ORD-REFUND-REOPEN",
+      customerId: customer.id,
+      occurredAt: new Date(),
+    });
+
+    const afterCapture = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(afterCapture!.status).toBe("RECOVERED");
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt_refund_reopen_2",
+      type: "REFUND",
+      amountPaise: 400000n,
+      source: "razorpay",
+      orderId: "ORD-REFUND-REOPEN",
+      customerId: customer.id,
+      occurredAt: new Date(),
+    });
+
+    const afterRefund = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(afterRefund!.outstandingAmountPaise).toBe(400000n);
+    expect(afterRefund!.recoveredAmountPaise).toBe(1000000n);
+    expect(afterRefund!.refundedAmountPaise).toBe(400000n);
+    expect(afterRefund!.status).toBe("PARTIALLY_RECOVERED");
+
+    const decisionEntries = await tx.auditEntry.findMany({
+      where: {
+        obligationId: obligation.id,
+        eventType: "DECISION_MADE",
+      },
+      orderBy: { timestamp: "asc" },
+    });
+    const lastDecision = decisionEntries[decisionEntries.length - 1];
+    const decisionState = lastDecision.stateAfter as Record<string, unknown>;
+    expect(decisionState.decision).toBe("ACT");
+
+    const actions = await tx.recoveryAction.findMany({
+      where: { obligationId: obligation.id },
+    });
+    expect(actions.length).toBe(1);
+    expect(actions[0].amountPaise).toBe(400000n);
+    expect(actions[0].status).toBe("CREATED");
+  });
 });

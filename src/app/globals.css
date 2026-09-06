@@ -58,3 +58,18 @@ body {
     linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
   background-size: 40px 40px;
 }
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(var(--float-rotate, 0deg));
+  }
+  50% {
+    transform: translateY(-8px) rotate(calc(var(--float-rotate, 0deg) * -1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="animation"] {
+    animation: none !important;
+  }
+}

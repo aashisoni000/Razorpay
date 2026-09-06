@@ -325,4 +325,234 @@ describe("event processing integration", () => {
     expect(eventTypes).toContain("BALANCE_UPDATED");
     expect(eventTypes).toContain("DECISION_MADE");
   });
+
+  it("TEST 8 — refund reopens obligation and creates new recovery action", async () => {
+    if (!tx) return;
+    const customer = await createCustomer("Refund Reopen User");
+    const obligation = await createObligation({
+      customerId: customer.id,
+      originalAmountPaise: 1000000n,
+      sourceReference: "ORD-REOPEN-001",
+    });
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt-reopen-capture",
+      type: "CAPTURED",
+      amountPaise: 1000000n,
+      source: "razorpay",
+      orderId: "ORD-REOPEN-001",
+      customerId: customer.id,
+      occurredAt: new Date("2025-01-15T10:00:00Z"),
+    });
+
+    const afterCapture = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(afterCapture!.status).toBe("RECOVERED");
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt-reopen-refund",
+      type: "REFUND",
+      amountPaise: 300000n,
+      source: "razorpay",
+      orderId: "ORD-REOPEN-001",
+      customerId: customer.id,
+      occurredAt: new Date("2025-01-15T11:00:00Z"),
+    });
+
+    const afterRefund = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(afterRefund!.outstandingAmountPaise).toBe(300000n);
+    expect(afterRefund!.recoveredAmountPaise).toBe(1000000n);
+    expect(afterRefund!.refundedAmountPaise).toBe(300000n);
+    expect(afterRefund!.status).toBe("PARTIALLY_RECOVERED");
+
+    const actions = await tx.recoveryAction.findMany({
+      where: { obligationId: obligation.id },
+    });
+    expect(actions.length).toBe(1);
+    expect(actions[0].amountPaise).toBe(300000n);
+    expect(actions[0].status).toBe("CREATED");
+  });
+
+  it("TEST 9 — overpayment audit trail captures excess details", async () => {
+    if (!tx) return;
+    const customer = await createCustomer("Overpay Audit User");
+    const obligation = await createObligation({
+      customerId: customer.id,
+      originalAmountPaise: 500000n,
+      sourceReference: "ORD-OVERPAY-AUDIT",
+    });
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt-overpay-audit-1",
+      type: "CAPTURED",
+      amountPaise: 700000n,
+      source: "razorpay",
+      orderId: "ORD-OVERPAY-AUDIT",
+      customerId: customer.id,
+      occurredAt: new Date("2025-01-15T10:00:00Z"),
+    });
+
+    const balanceEntries = await tx.auditEntry.findMany({
+      where: {
+        obligationId: obligation.id,
+        eventType: "BALANCE_UPDATED",
+      },
+    });
+    expect(balanceEntries.length).toBe(1);
+
+    const stateAfter = balanceEntries[0].stateAfter as Record<string, unknown>;
+    expect(stateAfter.status).toBe("OVERPAID");
+    expect(stateAfter.excessAmountPaise).toBe("200000");
+    expect(stateAfter.outstandingAmountPaise).toBe("0");
+
+    const decisionEntries = await tx.auditEntry.findMany({
+      where: {
+        obligationId: obligation.id,
+        eventType: "DECISION_MADE",
+      },
+    });
+    expect(decisionEntries.length).toBe(1);
+    const decisionState = decisionEntries[0].stateAfter as Record<string, unknown>;
+    expect(decisionState.decision).toBe("STOP");
+    expect(decisionState.reasonCode).toBe("outstanding_zero");
+  });
+
+  it("TEST 10 — full recovery resolves existing active recovery action", async () => {
+    if (!tx) return;
+    const customer = await createCustomer("Resolve Action User");
+    const obligation = await createObligation({
+      customerId: customer.id,
+      originalAmountPaise: 500000n,
+      sourceReference: "ORD-RESOLVE-ACT",
+    });
+
+    await tx.recoveryAction.create({
+      data: {
+        obligationId: obligation.id,
+        type: "payment_link",
+        status: "ACTIVE",
+        amountPaise: 500000n,
+        razorpayPaymentLinkId: "plink_stale",
+      },
+    });
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt-resolve-capture",
+      type: "CAPTURED",
+      amountPaise: 500000n,
+      source: "razorpay",
+      orderId: "ORD-RESOLVE-ACT",
+      customerId: customer.id,
+      occurredAt: new Date("2025-01-15T10:00:00Z"),
+    });
+
+    const updated = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(updated!.status).toBe("RECOVERED");
+    expect(updated!.outstandingAmountPaise).toBe(0n);
+
+    const actions = await tx.recoveryAction.findMany({
+      where: { obligationId: obligation.id },
+    });
+    expect(actions.length).toBe(1);
+    expect(actions[0].status).toBe("SUCCEEDED");
+    expect(actions[0].resolvedAt).not.toBeNull();
+  });
+
+  it("TEST 11 — payment from different customer creates exception", async () => {
+    if (!tx) return;
+    const custA = await createCustomer("Customer A");
+    const custB = await createCustomer("Customer B");
+    const obligation = await createObligation({
+      customerId: custA.id,
+      originalAmountPaise: 800000n,
+      sourceReference: "ORD-CUST-A",
+    });
+
+    const result = await processPaymentEvent(tx, {
+      externalEventId: "evt-wrong-cust",
+      type: "CAPTURED",
+      amountPaise: 800000n,
+      source: "razorpay",
+      orderId: "ORD-CUST-A",
+      customerId: custB.id,
+      occurredAt: new Date("2025-01-15T10:00:00Z"),
+    });
+
+    expect(result.linked).toBe(false);
+    expect(result.exceptionCreated).toBe(true);
+
+    const updated = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(updated!.recoveredAmountPaise).toBe(0n);
+  });
+
+  it("TEST 12 — refund amount exceeding recovered creates excess", async () => {
+    if (!tx) return;
+    const customer = await createCustomer("Excess Refund User");
+    const obligation = await createObligation({
+      customerId: customer.id,
+      originalAmountPaise: 500000n,
+      sourceReference: "ORD-EXCESS-REF",
+    });
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt-er-capture",
+      type: "CAPTURED",
+      amountPaise: 300000n,
+      source: "razorpay",
+      orderId: "ORD-EXCESS-REF",
+      customerId: customer.id,
+      occurredAt: new Date("2025-01-15T10:00:00Z"),
+    });
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt-er-refund",
+      type: "REFUND",
+      amountPaise: 400000n,
+      source: "razorpay",
+      orderId: "ORD-EXCESS-REF",
+      customerId: customer.id,
+      occurredAt: new Date("2025-01-15T11:00:00Z"),
+    });
+
+    const updated = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(updated!.recoveredAmountPaise).toBe(300000n);
+    expect(updated!.refundedAmountPaise).toBe(400000n);
+    expect(updated!.outstandingAmountPaise).toBe(600000n);
+  });
+
+  it("TEST 13 — zero-amount payment is processed but does not change ledger", async () => {
+    if (!tx) return;
+    const customer = await createCustomer("Zero Amount User");
+    const obligation = await createObligation({
+      customerId: customer.id,
+      originalAmountPaise: 500000n,
+      sourceReference: "ORD-ZERO-AMT",
+    });
+
+    await processPaymentEvent(tx, {
+      externalEventId: "evt-zero-amt",
+      type: "CAPTURED",
+      amountPaise: 0n,
+      source: "razorpay",
+      orderId: "ORD-ZERO-AMT",
+      customerId: customer.id,
+      occurredAt: new Date("2025-01-15T10:00:00Z"),
+    });
+
+    const updated = await tx.obligation.findUnique({
+      where: { id: obligation.id },
+    });
+    expect(updated!.recoveredAmountPaise).toBe(0n);
+    expect(updated!.outstandingAmountPaise).toBe(500000n);
+    expect(updated!.status).toBe("OPEN");
+  });
 });

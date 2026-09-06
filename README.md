@@ -30,52 +30,31 @@ Settle reconstructs the **obligation** — what the customer actually owes — a
 ## Architecture
 
 ```
-src/
-  lib/
-    domain/          # Pure business logic (no DB, no framework)
-      ledger.ts      # Obligation balance calculation
-      matching.ts    # Payment → obligation matching (3-tier evidence)
-      decision.ts    # Recovery decision engine (4 outcomes)
-      policies.ts    # Recovery policy configuration
-      types.ts       # All domain interfaces
-      validation.ts  # Zod schemas for input validation
-
-    services/        # Application layer (DB + domain)
-      payment-event-service.ts   # Core event processing pipeline
-      obligation-service.ts      # Ledger recompute + decision eval
-      audit-service.ts           # Audit trail creation
-      exception-service.ts       # Exception creation
-      recovery-service.ts        # Razorpay payment link orchestration
-      dashboard-service.ts       # Aggregation queries for UI
-
-    ml/              # ML candidate-ranking layer
-      features.ts    # Feature extraction (14 features)
-      dataset.ts     # Synthetic dataset generation
-      model.ts       # Logistic regression (from scratch, zero deps)
-      evaluate.ts    # Classification + ranking metrics
-      ranker.ts      # Candidate ranking service
-
-    razorpay/        # Razorpay integration
-      client.ts      # REST API client (built-in fetch)
-      webhook-verification.ts  # HMAC-SHA256 signature verification
-      normalize.ts   # Webhook → internal format mapping
-      types.ts       # Razorpay-specific types
-
-    demo/            # Deterministic replay system
-      scenarios.ts   # 11 scenario definitions
-      replay.ts      # Scenario replay engine
-
-  app/               # Next.js App Router pages
-    page.tsx         # Dashboard overview
-    obligations/     # Obligation list + detail
-    recovery/        # Recovery actions
-    exceptions/      # Exception queue
-    audit/           # Audit trail
-    settings/        # System configuration
-
-prisma/
-  schema.prisma      # 7 models, 4 enums
-  seed.ts            # Demo data with 6 scenarios
+Payment Events (webhook / manual)
+      ↓
+Deterministic Matching (3-tier evidence)
+      ↓
+    Clear? ──→ Match → Ledger → Decision → Recovery
+      ↓
+    Ambiguous?
+      ↓
+  ML Candidate Ranking
+      ↓
+  Confidence?
+    ↓      ↓
+  Match   Abstain
+    ↓       ↓
+  Ledger  Exception (human review)
+    ↓
+  Deterministic Decision (ACT/WAIT/STOP/ESCALATE)
+    ↓
+  Recovery Orchestrator
+    ↓
+  Razorpay Payment Link (if configured)
+    ↓
+  Webhook
+    ↓
+  Payment Event → cycle repeats
 ```
 
 ## Ledger Model
@@ -134,6 +113,17 @@ Priority-based rule engine (no LLM in money-moving path):
 - **Event Normalization**: Maps Razorpay webhook payloads to internal format
 - **Idempotency**: Duplicate webhooks produce one financial effect
 
+## Settle Assistant
+
+A read-only AI assistant that explains obligation state in plain English.
+
+- **Provider**: OpenAI (gpt-4o-mini) or Anthropic (claude-sonnet-4-20250514)
+- **Read-only**: No tools, no mutations, no financial recommendations
+- **Graceful**: Disabled when no provider key is configured
+- **Server-side**: API calls go through the server, never exposed to client
+
+The assistant uses structured facts from the database to generate explanations. It never invents customer behavior, payment intent, or future outcomes.
+
 ## ML Candidate-Ranking Layer
 
 **What it does**: Ranks candidate obligations for ambiguous payments.
@@ -158,7 +148,7 @@ UNCERTAIN → ESCALATE (exception)
 - **Algorithm**: Logistic regression (from scratch, zero npm dependencies)
 - **Features**: 14 numerical features (same customer, amount ratio, reference match, etc.)
 - **Training**: Synthetic dataset generated from 11 deterministic scenarios + variations
-- **Abstention**: If top-2 scores within threshold → abstain → human review
+- **Abstention**: If confidence is insufficient → abstain → human review
 
 ### Safety Rules
 
@@ -167,6 +157,24 @@ UNCERTAIN → ESCALATE (exception)
 - ML never decides recovery amounts
 - Model failure → deterministic fallback (exception/escalation)
 - Ambiguous → exception, not automatic match
+
+### Evaluation (Honest Metrics)
+
+| Metric | Value |
+|--------|-------|
+| Pair Precision | 1.000 |
+| Pair Coverage | 0.09% |
+| Payment Precision | 1.000 |
+| Payment Coverage | 0.61% |
+| Top-1 Hit Rate | 11.0% |
+| Top-3 Hit Rate | 27.0% |
+| MRR | 0.191 |
+| Deterministic Resolved | 78.3% |
+| ML Accepted | 8 / 5,000 (0.2%) |
+
+**Verdict**: ML_EXPERIMENT_VALID = true. READY_FOR_INTEGRATION = false.
+
+The model is internally consistent with no ground-truth leakage. However, it adds negligible value over the deterministic filter and should not be integrated into production without calibration, production data, and improved coverage.
 
 ## Audit Trail
 
@@ -188,11 +196,81 @@ Each entry includes:
 | # | Scenario | Expected Outcome |
 |---|----------|-----------------|
 | 1 | Failed ₹10k card → ₹6k UPI + ₹4k UPI | RECOVERED → STOP |
-| 2 | ₹10k obligation → ₹6.5k payment | PARTIALLY_RECOVERED → ACT |
-| 3 | Two obligations → ambiguous ₹7k payment | ESCALATE |
+| 2 | ₹3.5k obligation → ₹2k payment | PARTIALLY_RECOVERED → ACT |
+| 3 | Two obligations → ambiguous ₹5k payment | ESCALATE |
 | 4 | ₹10k obligation → ₹12k payment | OVERPAID → STOP |
 | 5 | ₹10k recovered → ₹2k refund | PARTIALLY_RECOVERED → ACT |
-| 6 | Active recovery → customer pays via alternate | RECOVERED → STOP |
+
+## Demo Walkthrough (3–5 minutes)
+
+### 1. Problem (20–30 seconds)
+
+"Payment systems track transactions. Businesses need to track obligations."
+
+₹10,000 was owed. A ₹10,000 payment failed. Then ₹6,000 succeeded. Then ₹4,000 succeeded.
+
+A transaction-level retry would incorrectly attempt another ₹10,000.
+
+Settle reconstructs the obligation.
+
+### 2. Full Recovery — Priya (60 seconds)
+
+Open Priya (ORD-FLAGSHIP).
+
+- Original ₹10,000
+- Recovered ₹10,000
+- Outstanding ₹0
+- Status: RECOVERED
+- Decision: STOP
+
+"Settle knows nothing more needs to be recovered, so it stops the unnecessary recovery."
+
+### 3. Partial Recovery — Rahul (60 seconds)
+
+Open Rahul (ORD-PARTIAL).
+
+- Original ₹3,500
+- Recovered ₹2,000
+- Outstanding ₹1,500
+- Decision: ACT
+
+Show RecoveryAction created.
+
+If Razorpay Test Mode is configured: show the Payment Link flow. If not: explain the provider-less mode honestly.
+
+### 4. Ambiguity — Ananya (45 seconds)
+
+Open Exceptions.
+
+Show ambiguous payment with two candidate obligations.
+
+Show evidence tier: INSUFFICIENT_EVIDENCE.
+
+Show: AUTOMATIC ACTION BLOCKED.
+
+Then: ESCALATE.
+
+"When Settle isn't confident, it does not guess."
+
+### 5. ML + Settings (30–45 seconds)
+
+Open Settings / Model Card.
+
+"ML is only used in the ambiguous matching layer."
+
+"78.3% of payments are handled deterministically."
+
+"The model has perfect precision but extremely low coverage — we intentionally do not pretend this is production-ready."
+
+"Even when ML is involved, it cannot move money."
+
+### 6. Audit Trail (20–30 seconds)
+
+Open Audit.
+
+Show: Payment → Match → Ledger → Decision → Recovery.
+
+"Every financial decision has an explainable trail."
 
 ## Getting Started
 
@@ -229,13 +307,25 @@ RAZORPAY_KEY_SECRET="..."
 RAZORPAY_WEBHOOK_SECRET="..."
 ```
 
+### Settle Assistant (Optional)
+
+The read-only Settle Assistant explains obligation state in plain English.
+
+```
+OPENAI_API_KEY="sk-..."
+# or
+ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+Without an LLM key, the assistant is disabled. The application works fully without it.
+
 ### Running Tests
 
 ```bash
-# Unit + domain tests (131 tests)
+# Unit + domain + ML tests (194 tests)
 npm test
 
-# Integration tests (13 tests, requires PostgreSQL)
+# Integration tests (20 tests, requires PostgreSQL)
 npm run test:integration
 
 # Build
@@ -258,9 +348,11 @@ npm run lint
 
 - "AI makes financial decisions" → The financial engine is deterministic. ML is assistive only.
 - "Production-ready" → This is a hackathon demo.
+- "ML is production-ready" → READY_FOR_INTEGRATION = false. Synthetic data only.
 - "94% accuracy" → Evaluation is on synthetic data. Label it as such.
 - "Authentication included" → There is none.
 - "Real Razorpay production integration" → Test Mode only.
+- "Assistant works without configuration" → Requires OPENAI_API_KEY or ANTHROPIC_API_KEY.
 
 ## Tech Stack
 

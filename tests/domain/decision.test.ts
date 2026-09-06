@@ -168,6 +168,45 @@ describe("decide", () => {
     });
   });
 
+  describe("expired/failed actions do not block recovery", () => {
+    it("acts when activeActions is empty (expired/failed actions filtered out upstream)", () => {
+      const result = decide(
+        makeInput({
+          activeActions: [],
+        })
+      );
+      expect(result.decision).toBe("ACT");
+      expect(result.reasonCode).toBe("outstanding_and_policy_allows");
+    });
+
+    it("WAIT wins over ACT even when cooldown has expired", () => {
+      const result = decide(
+        makeInput({
+          activeActions: [],
+          recentActionTimestamps: [],
+          paymentCount: 0,
+        })
+      );
+      expect(result.decision).toBe("ACT");
+    });
+
+    it("STOP still wins when outstanding_zero and no active actions", () => {
+      const result = decide(
+        makeInput({
+          obligation: {
+            id: "ob-1",
+            outstandingAmountPaise: 0n,
+            status: "RECOVERED",
+          },
+          activeActions: [],
+          paymentCount: 2,
+        })
+      );
+      expect(result.decision).toBe("STOP");
+      expect(result.reasonCode).toBe("outstanding_zero");
+    });
+  });
+
   describe("priority ordering", () => {
     it("outstanding_zero wins over active action", () => {
       const result = decide(

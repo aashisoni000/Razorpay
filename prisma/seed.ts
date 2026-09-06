@@ -3,6 +3,19 @@ import { processPaymentEvent } from "../src/lib/services/payment-event-service";
 
 const prisma = new PrismaClient();
 
+function daysAgo(n: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(10, 0, 0, 0);
+  return d;
+}
+
+function hoursAgo(n: number): Date {
+  const d = new Date();
+  d.setHours(d.getHours() - n);
+  return d;
+}
+
 async function main() {
   console.log("Seeding Settle database...");
 
@@ -40,7 +53,10 @@ async function main() {
     }),
   ]);
 
-  // SCENARIO 1: Failed card → alternate payments → settled → STOP
+  // SCENARIO A: Full Recovery — Priya
+  // Original: ₹10,000
+  // Events: Failed ₹10,000 → Successful ₹6,000 → Successful ₹4,000
+  // Final: Recovered, Outstanding ₹0, Decision STOP
   await prisma.obligation.create({
     data: {
       customerId: customers[0].id,
@@ -52,19 +68,63 @@ async function main() {
     },
   });
 
-  // SCENARIO 2: Partial payment → recovery decision ACT
+  await processPaymentEvent(prisma, {
+    externalEventId: "seed-flag-1",
+    type: "FAILED",
+    amountPaise: 1000000n,
+    source: "razorpay",
+    orderId: "ORD-FLAGSHIP",
+    customerId: customers[0].id,
+    occurredAt: daysAgo(6),
+  });
+
+  await processPaymentEvent(prisma, {
+    externalEventId: "seed-flag-2",
+    type: "CAPTURED",
+    amountPaise: 600000n,
+    source: "razorpay",
+    orderId: "ORD-FLAGSHIP",
+    customerId: customers[0].id,
+    occurredAt: daysAgo(5),
+  });
+
+  await processPaymentEvent(prisma, {
+    externalEventId: "seed-flag-3",
+    type: "CAPTURED",
+    amountPaise: 400000n,
+    source: "razorpay",
+    orderId: "ORD-FLAGSHIP",
+    customerId: customers[0].id,
+    occurredAt: daysAgo(5),
+  });
+
+  // SCENARIO B: Partial Recovery — Rahul
+  // Original: ₹3,500
+  // Event: Successful ₹2,000
+  // Final: Partially Recovered, Outstanding ₹1,500, Decision ACT
   await prisma.obligation.create({
     data: {
       customerId: customers[1].id,
-      originalAmountPaise: 1000000n,
+      originalAmountPaise: 350000n,
       sourceType: "order",
       sourceReference: "ORD-PARTIAL",
-      outstandingAmountPaise: 1000000n,
+      outstandingAmountPaise: 350000n,
       recoveryPolicyId: policy.id,
     },
   });
 
-  // SCENARIO 3: Two obligations → ambiguous payment → ESCALATE
+  await processPaymentEvent(prisma, {
+    externalEventId: "seed-partial-1",
+    type: "CAPTURED",
+    amountPaise: 200000n,
+    source: "razorpay",
+    orderId: "ORD-PARTIAL",
+    customerId: customers[1].id,
+    occurredAt: daysAgo(4),
+  });
+
+  // SCENARIO C: Ambiguous — Ananya
+  // Two obligations, one ambiguous payment → ESCALATE, exception created
   await prisma.obligation.create({
     data: {
       customerId: customers[2].id,
@@ -87,7 +147,17 @@ async function main() {
     },
   });
 
-  // SCENARIO 4: Overpayment → OVERPAID → no refund
+  await processPaymentEvent(prisma, {
+    externalEventId: "seed-ambig-1",
+    type: "CAPTURED",
+    amountPaise: 500000n,
+    source: "razorpay",
+    customerId: customers[2].id,
+    occurredAt: daysAgo(3),
+  });
+
+  // SCENARIO D: Overpayment — Vikram
+  // Original: ₹10,000, Paid: ₹12,000 → OVERPAID
   await prisma.obligation.create({
     data: {
       customerId: customers[3].id,
@@ -99,7 +169,19 @@ async function main() {
     },
   });
 
-  // SCENARIO 5: Refund after recovery → outstanding increases
+  await processPaymentEvent(prisma, {
+    externalEventId: "seed-over-1",
+    type: "CAPTURED",
+    amountPaise: 1200000n,
+    source: "razorpay",
+    orderId: "ORD-OVERPAY",
+    customerId: customers[3].id,
+    occurredAt: daysAgo(2),
+  });
+
+  // SCENARIO E: Refund after Recovery — Neha
+  // Original: ₹10,000, Paid: ₹10,000, Refunded: ₹2,000
+  // Final: Partially Recovered, Outstanding ₹2,000
   await prisma.obligation.create({
     data: {
       customerId: customers[4].id,
@@ -111,77 +193,6 @@ async function main() {
     },
   });
 
-  // Process events through the real pipeline
-
-  // SCENARIO 1: Flagship - failed card, then two UPI payments
-  console.log("Processing Scenario 1: Flagship alternate payments...");
-  await processPaymentEvent(prisma, {
-    externalEventId: "seed-flag-1",
-    type: "FAILED",
-    amountPaise: 1000000n,
-    source: "razorpay",
-    orderId: "ORD-FLAGSHIP",
-    customerId: customers[0].id,
-    occurredAt: new Date("2025-01-15T10:00:00Z"),
-  });
-
-  await processPaymentEvent(prisma, {
-    externalEventId: "seed-flag-2",
-    type: "CAPTURED",
-    amountPaise: 600000n,
-    source: "razorpay",
-    orderId: "ORD-FLAGSHIP",
-    customerId: customers[0].id,
-    occurredAt: new Date("2025-01-15T10:30:00Z"),
-  });
-
-  await processPaymentEvent(prisma, {
-    externalEventId: "seed-flag-3",
-    type: "CAPTURED",
-    amountPaise: 400000n,
-    source: "razorpay",
-    orderId: "ORD-FLAGSHIP",
-    customerId: customers[0].id,
-    occurredAt: new Date("2025-01-15T11:00:00Z"),
-  });
-
-  // SCENARIO 2: Partial payment
-  console.log("Processing Scenario 2: Partial payment...");
-  await processPaymentEvent(prisma, {
-    externalEventId: "seed-partial-1",
-    type: "CAPTURED",
-    amountPaise: 650000n,
-    source: "razorpay",
-    orderId: "ORD-PARTIAL",
-    customerId: customers[1].id,
-    occurredAt: new Date("2025-01-15T10:00:00Z"),
-  });
-
-  // SCENARIO 3: Ambiguous payment (no reference, multiple candidates)
-  console.log("Processing Scenario 3: Ambiguous payment...");
-  await processPaymentEvent(prisma, {
-    externalEventId: "seed-ambig-1",
-    type: "CAPTURED",
-    amountPaise: 500000n,
-    source: "razorpay",
-    customerId: customers[2].id,
-    occurredAt: new Date("2025-01-15T10:00:00Z"),
-  });
-
-  // SCENARIO 4: Overpayment
-  console.log("Processing Scenario 4: Overpayment...");
-  await processPaymentEvent(prisma, {
-    externalEventId: "seed-over-1",
-    type: "CAPTURED",
-    amountPaise: 1200000n,
-    source: "razorpay",
-    orderId: "ORD-OVERPAY",
-    customerId: customers[3].id,
-    occurredAt: new Date("2025-01-15T10:00:00Z"),
-  });
-
-  // SCENARIO 5: Refund after recovery
-  console.log("Processing Scenario 5: Refund after recovery...");
   await processPaymentEvent(prisma, {
     externalEventId: "seed-refund-1",
     type: "CAPTURED",
@@ -189,7 +200,7 @@ async function main() {
     source: "razorpay",
     orderId: "ORD-REFUND",
     customerId: customers[4].id,
-    occurredAt: new Date("2025-01-15T10:00:00Z"),
+    occurredAt: daysAgo(1),
   });
 
   await processPaymentEvent(prisma, {
@@ -199,14 +210,13 @@ async function main() {
     source: "razorpay",
     orderId: "ORD-REFUND",
     customerId: customers[4].id,
-    occurredAt: new Date("2025-01-15T11:00:00Z"),
+    occurredAt: hoursAgo(18),
   });
 
   console.log("Seed complete.");
   console.log(`  Customers: ${customers.length}`);
   console.log("  Obligations: 6 (flagship, partial, 2x ambiguous, overpay, refund)");
-  console.log("  Scenarios demonstrated: 5 of 6");
-  console.log("  (Scenario 6: Active recovery → customer pays requires Razorpay Test Mode)");
+  console.log("  Scenarios: A=Full Recovery, B=Partial, C=Ambiguous, D=Overpay, E=Refund");
 }
 
 main()

@@ -7,7 +7,21 @@ const CreateLinkSchema = z.object({
   obligationId: z.string().min(1),
 });
 
+function isAdmin(request: NextRequest): boolean {
+  const adminToken = process.env.SETTLE_ADMIN_TOKEN;
+  if (!adminToken) return true;
+  const authHeader = request.headers.get("authorization");
+  return authHeader === `Bearer ${adminToken}`;
+}
+
 export async function POST(request: NextRequest) {
+  if (!isAdmin(request)) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json();
     const parsed = CreateLinkSchema.parse(body);

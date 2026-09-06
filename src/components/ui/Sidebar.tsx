@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { label: "Overview", href: "/", icon: "grid" },
+  { label: "Overview", href: "/dashboard", icon: "grid" },
   { label: "Obligations", href: "/obligations", icon: "file-text" },
   { label: "Recovery", href: "/recovery", icon: "refresh-cw" },
   { label: "Exceptions", href: "/exceptions", icon: "alert-triangle" },
@@ -64,10 +64,7 @@ export function Sidebar() {
       <nav className="flex-1 px-3">
         <ul className="space-y-0.5">
           {navItems.map((item) => {
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+            const isActive = pathname.startsWith(item.href);
             return (
               <li key={item.href}>
                 <Link

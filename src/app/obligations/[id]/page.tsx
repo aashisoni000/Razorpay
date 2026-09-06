@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getObligationDetail } from "@/lib/services/dashboard-service";
 import { formatPaise } from "@/lib/utils/money";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 
 function formatEventType(type: string): string {
   const map: Record<string, string> = {
@@ -11,6 +12,7 @@ function formatEventType(type: string): string {
     BALANCE_UPDATED: "Balance updated",
     DECISION_MADE: "Decision made",
     RECOVERY_ACTION_CREATED: "Recovery action created",
+    RECOVERY_ACTION_RESOLVED: "Recovery action resolved",
     OBLIGATION_OPENED: "Obligation created",
     OBLIGATION_RECOVERED: "Obligation recovered",
     OBLIGATION_ESCALATED: "Obligation escalated",
@@ -33,9 +35,37 @@ function formatActionType(type: string): string {
   return map[type] ?? type;
 }
 
-function TimelineEvent({ entry }: { entry: { id: string; eventType: string; stateAfter: unknown; decision: string | null; reasonCode: string | null; timestamp: Date } }) {
+function DecisionBadge({ decision }: { decision: string }) {
+  const styles: Record<string, string> = {
+    ACT: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    WAIT: "bg-amber-50 text-amber-700 border-amber-200",
+    STOP: "bg-gray-100 text-gray-600 border-gray-200",
+    ESCALATE: "bg-red-50 text-red-700 border-red-200",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[decision] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}
+    >
+      {decision}
+    </span>
+  );
+}
+
+function TimelineEvent({
+  entry,
+}: {
+  entry: {
+    id: string;
+    eventType: string;
+    stateAfter: unknown;
+    decision: string | null;
+    reasonCode: string | null;
+    timestamp: Date;
+  };
+}) {
   const stateAfter = entry.stateAfter as Record<string, unknown> | null;
-  const outstanding = stateAfter?.outstandingAmountPaise as bigint | undefined;
+  const outstanding = stateAfter?.outstandingAmountPaise;
+  const evidence = (stateAfter?.evidence as string[] | undefined) ?? [];
 
   return (
     <div className="flex gap-4">
@@ -49,16 +79,34 @@ function TimelineEvent({ entry }: { entry: { id: string; eventType: string; stat
             {formatEventType(entry.eventType)}
           </span>
           {outstanding !== undefined && outstanding !== null && (
-            <span className="text-sm font-mono text-text-secondary">
-              {formatPaise(outstanding)} outstanding
+            <span className="text-xs font-mono text-text-secondary">
+              {typeof outstanding === "string"
+                ? `${outstanding} paise`
+                : typeof outstanding === "number"
+                  ? formatPaise(BigInt(Math.round(outstanding)))
+                  : ""}{" "}
+              outstanding
             </span>
           )}
         </div>
         {entry.decision && (
-          <p className="text-xs text-text-muted mt-1">
-            Decision: {entry.decision}
-            {entry.reasonCode && ` (${entry.reasonCode})`}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <DecisionBadge decision={entry.decision} />
+            {entry.reasonCode && (
+              <span className="text-xs text-text-muted">
+                {entry.reasonCode.replace(/_/g, " ")}
+              </span>
+            )}
+          </div>
+        )}
+        {evidence && evidence.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {evidence.map((e, i) => (
+              <p key={i} className="text-xs text-text-muted">
+                {e}
+              </p>
+            ))}
+          </div>
         )}
         <p className="text-xs text-text-muted mt-2">
           {entry.timestamp.toLocaleString()}
@@ -82,8 +130,15 @@ export default async function ObligationDetailPage({
 
   const recoveryPct =
     obligation.originalAmountPaise > 0n
-      ? Number((obligation.recoveredAmountPaise * 100n) / obligation.originalAmountPaise)
+      ? Number(
+          (obligation.recoveredAmountPaise * 100n) /
+            obligation.originalAmountPaise
+        )
       : 0;
+
+  const lastDecision = obligation.auditEntries
+    .filter((e) => e.decision)
+    .pop();
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -105,10 +160,10 @@ export default async function ObligationDetailPage({
         </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-surface rounded-xl border border-border-subtle p-5">
           <p className="text-xs text-text-secondary uppercase tracking-wide font-medium">
-            Original Amount
+            Original
           </p>
           <p className="text-xl font-bold mt-1 text-text-primary font-mono">
             {formatPaise(obligation.originalAmountPaise)}
@@ -130,18 +185,51 @@ export default async function ObligationDetailPage({
         </div>
         <div className="bg-surface rounded-xl border border-border-subtle p-5">
           <p className="text-xs text-text-secondary uppercase tracking-wide font-medium">
+            Refunded
+          </p>
+          <p className="text-xl font-bold mt-1 text-text-primary font-mono">
+            {formatPaise(obligation.refundedAmountPaise)}
+          </p>
+        </div>
+        <div
+          className={`rounded-xl border p-5 ${
+            obligation.outstandingAmountPaise > 0n
+              ? "bg-accent-muted border-accent/30"
+              : "bg-surface border-border-subtle"
+          }`}
+        >
+          <p className="text-xs text-text-secondary uppercase tracking-wide font-medium">
             Outstanding
           </p>
           <p className="text-xl font-bold mt-1 text-text-primary font-mono">
             {formatPaise(obligation.outstandingAmountPaise)}
           </p>
         </div>
-        <div className="bg-surface rounded-xl border border-border-subtle p-5">
-          <p className="text-xs text-text-secondary uppercase tracking-wide font-medium">
-            Excess / Refunded
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-surface rounded-xl border border-border-subtle p-4">
+          <p className="text-xs text-text-secondary uppercase tracking-wide font-medium mb-1">
+            Status
           </p>
-          <p className="text-xl font-bold mt-1 text-text-primary font-mono">
-            {formatPaise(obligation.excessAmountPaise + obligation.refundedAmountPaise)}
+          <StatusBadge status={obligation.status} />
+        </div>
+        <div className="bg-surface rounded-xl border border-border-subtle p-4">
+          <p className="text-xs text-text-secondary uppercase tracking-wide font-medium mb-1">
+            Last Decision
+          </p>
+          {lastDecision ? (
+            <DecisionBadge decision={lastDecision.decision!} />
+          ) : (
+            <span className="text-xs text-text-muted">—</span>
+          )}
+        </div>
+        <div className="bg-surface rounded-xl border border-border-subtle p-4">
+          <p className="text-xs text-text-secondary uppercase tracking-wide font-medium mb-1">
+            Reason
+          </p>
+          <p className="text-sm text-text-primary">
+            {lastDecision?.reasonCode?.replace(/_/g, " ") ?? "—"}
           </p>
         </div>
       </div>
@@ -165,6 +253,8 @@ export default async function ObligationDetailPage({
         </div>
 
         <div className="space-y-6">
+          <AssistantPanel obligationId={obligation.id} />
+
           <div className="bg-surface rounded-xl border border-border-subtle p-6">
             <h2 className="text-sm font-semibold text-text-primary mb-4">
               Payment Events
@@ -218,6 +308,9 @@ export default async function ObligationDetailPage({
                       </span>
                       <StatusBadge status={action.status} />
                     </div>
+                    <p className="text-xs font-mono text-text-secondary mt-1">
+                      {formatPaise(action.amountPaise)}
+                    </p>
                     {action.razorpayPaymentLinkId && (
                       <p className="text-xs text-text-muted mt-1 font-mono">
                         {action.razorpayPaymentLinkId}
@@ -242,11 +335,13 @@ export default async function ObligationDetailPage({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-text-primary">
-                        {ex.type}
+                        {ex.type.replace(/_/g, " ")}
                       </span>
                       <StatusBadge status={ex.status} />
                     </div>
-                    <p className="text-xs text-text-muted mt-1">{ex.description}</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      {ex.description}
+                    </p>
                   </div>
                 ))}
               </div>

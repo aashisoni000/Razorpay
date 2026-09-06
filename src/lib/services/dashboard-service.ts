@@ -160,3 +160,139 @@ export async function getCustomers() {
     orderBy: { name: "asc" },
   });
 }
+
+export async function getRecoveryTrend() {
+  const events = await prisma.paymentEvent.findMany({
+    where: { type: { in: ["CAPTURED", "PAYMENT_LINK_EVENT"] } },
+    select: { amountPaise: true, occurredAt: true },
+    orderBy: { occurredAt: "asc" },
+  });
+
+  const byDate = new Map<string, bigint>();
+  for (const e of events) {
+    const key = e.occurredAt.toISOString().slice(0, 10);
+    byDate.set(key, (byDate.get(key) ?? 0n) + e.amountPaise);
+  }
+
+  return Array.from(byDate.entries())
+    .map(([date, amount]) => ({ date, amount }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function getRecoveryActionSummary() {
+  const counts = await prisma.recoveryAction.groupBy({
+    by: ["status"],
+    _count: { id: true },
+  });
+
+  const statusMap: Record<string, number> = {};
+  for (const row of counts) {
+    statusMap[row.status] = row._count.id;
+  }
+
+  return {
+    total: counts.reduce((sum, r) => sum + r._count.id, 0),
+    byStatus: statusMap,
+  };
+}
+
+export async function getOutstandingByCustomer() {
+  const rows = await prisma.obligation.groupBy({
+    by: ["customerId"],
+    where: { outstandingAmountPaise: { gt: 0n } },
+    _sum: { outstandingAmountPaise: true },
+    _count: { id: true },
+    orderBy: { _sum: { outstandingAmountPaise: "desc" } },
+  });
+
+  const customerIds = rows.map((r) => r.customerId);
+  const customers = await prisma.customer.findMany({
+    where: { id: { in: customerIds } },
+    select: { id: true, name: true },
+  });
+  const nameMap = new Map(customers.map((c) => [c.id, c.name]));
+
+  return rows
+    .map((r) => ({
+      customerId: r.customerId,
+      name: nameMap.get(r.customerId) ?? "Unknown",
+      outstanding: r._sum.outstandingAmountPaise ?? 0n,
+      obligationCount: r._count.id,
+    }))
+    .filter((r) => r.outstanding > 0n)
+    .sort((a, b) => (b.outstanding > a.outstanding ? 1 : -1));
+}
+
+export async function getExceptionSummary() {
+  const [byType, byStatus] = await Promise.all([
+    prisma.exception.groupBy({
+      by: ["type"],
+      _count: { id: true },
+    }),
+    prisma.exception.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    }),
+  ]);
+
+  const typeMap: Record<string, number> = {};
+  for (const row of byType) {
+    typeMap[row.type] = row._count.id;
+  }
+
+  const statusMap: Record<string, number> = {};
+  for (const row of byStatus) {
+    statusMap[row.status] = row._count.id;
+  }
+
+  return { byType: typeMap, byStatus: statusMap };
+}
+
+export async function getAuditDecisionSummary() {
+  const rows = await prisma.auditEntry.groupBy({
+    by: ["decision"],
+    where: { decision: { not: null } },
+    _count: { id: true },
+  });
+
+  const map: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.decision) map[row.decision] = row._count.id;
+  }
+
+  return map;
+}
+
+export async function getAuditTrend() {
+  const events = await prisma.auditEntry.findMany({
+    select: { timestamp: true },
+    orderBy: { timestamp: "asc" },
+  });
+
+  const byDate = new Map<string, number>();
+  for (const e of events) {
+    const key = e.timestamp.toISOString().slice(0, 10);
+    byDate.set(key, (byDate.get(key) ?? 0) + 1);
+  }
+
+  return Array.from(byDate.entries())
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function getRecoveryActionAmounts() {
+  const actions = await prisma.recoveryAction.findMany({
+    include: {
+      obligation: { include: { customer: true } },
+    },
+    orderBy: { amountPaise: "desc" },
+  });
+
+  return actions.map((a) => ({
+    id: a.id,
+    customer: a.obligation?.customer?.name ?? "Unknown",
+    reference: a.obligation?.sourceReference ?? a.obligationId.slice(0, 8),
+    amount: a.amountPaise,
+    status: a.status,
+  }));
+}
